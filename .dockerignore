@@ -1,0 +1,25 @@
+.git
+.github
+.claude
+.pytest_cache
+.vercel
+__pycache__
+*.pyc
+node_modules
+
+# Large files not needed for backend
+07_Graph_DB_Project/vocabulary_graph.json
+07_Graph_DB_Project/9000word_full_db.csv
+07_Graph_DB_Project/node_modules
+9000word_full_db_pre_cleanup_*.csv
+Copy of master_vocabulary_table.xlsx
+RobDictionary.xlsx
+cleaned_vocabulary_9000.csv
+9000vocab_master_table.csv
+
+# Frontend (deployed separately on Vercel)
+irt_cat_engine/frontend/
+irt_cat_engine/tests/
+
+# Existing SQLite DB (created fresh on startup)
+irt_cat_engine/db/*.db
