@@ -57,6 +57,96 @@ ACTIVE_SESSIONS = Gauge(
     "Number of currently active test sessions"
 )
 
+ITEM_GENERATION_SCORE = Histogram(
+    "item_generation_score",
+    "Distribution of generated item quality score (0-100)",
+    ["stage", "model", "exam_type"],
+    buckets=[0, 20, 40, 50, 60, 70, 80, 90, 95, 100],
+)
+
+ITEM_GENERATION_TARGET_GAP = Histogram(
+    "item_generation_target_gap",
+    "Absolute gap between target and actual difficulty",
+    ["stage", "model", "exam_type"],
+    buckets=[0, 1, 2, 3, 5, 8, 13, 21],
+)
+
+ITEM_GENERATION_ACCEPTED_TOTAL = Counter(
+    "item_generation_accepted_total",
+    "Total number of generated items accepted",
+    ["stage", "model", "exam_type"],
+)
+
+ITEM_GENERATION_REJECTED_TOTAL = Counter(
+    "item_generation_rejected_total",
+    "Total number of generated items rejected",
+    ["stage", "model", "exam_type"],
+)
+
+
+def observe_item_generation_score(
+    score: float,
+    *,
+    stage: str = "final",
+    model: str = "unknown",
+    exam_type: str = "csat",
+) -> None:
+    """Record a generated item score into histogram metrics."""
+    score_value = max(0.0, min(100.0, float(score)))
+    ITEM_GENERATION_SCORE.labels(stage=stage, model=model, exam_type=exam_type).observe(score_value)
+
+
+def observe_item_generation_target_gap(
+    target_difficulty: float,
+    actual_difficulty: float,
+    *,
+    stage: str = "final",
+    model: str = "unknown",
+    exam_type: str = "csat",
+) -> None:
+    """Record absolute difficulty gap for generated items."""
+    gap = abs(float(target_difficulty) - float(actual_difficulty))
+    ITEM_GENERATION_TARGET_GAP.labels(stage=stage, model=model, exam_type=exam_type).observe(gap)
+
+
+def record_item_generation_outcome(
+    accepted: bool,
+    *,
+    stage: str = "final",
+    model: str = "unknown",
+    exam_type: str = "csat",
+) -> None:
+    """Count whether generated item is accepted or rejected."""
+    labels = {"stage": stage, "model": model, "exam_type": exam_type}
+    if accepted:
+        ITEM_GENERATION_ACCEPTED_TOTAL.labels(**labels).inc()
+    else:
+        ITEM_GENERATION_REJECTED_TOTAL.labels(**labels).inc()
+
+
+def record_item_generation(
+    score: float,
+    *,
+    accepted: bool,
+    stage: str = "final",
+    model: str = "unknown",
+    exam_type: str = "csat",
+    target_difficulty: float | None = None,
+    actual_difficulty: float | None = None,
+) -> None:
+    """Record score, outcome and optional target-gap metrics for one generated item."""
+    observe_item_generation_score(score, stage=stage, model=model, exam_type=exam_type)
+    record_item_generation_outcome(accepted, stage=stage, model=model, exam_type=exam_type)
+
+    if target_difficulty is not None and actual_difficulty is not None:
+        observe_item_generation_target_gap(
+            target_difficulty,
+            actual_difficulty,
+            stage=stage,
+            model=model,
+            exam_type=exam_type,
+        )
+
 
 class PrometheusMiddleware(BaseHTTPMiddleware):
     """Middleware to collect Prometheus metrics for all HTTP requests."""

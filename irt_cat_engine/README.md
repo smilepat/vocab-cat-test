@@ -82,6 +82,33 @@ uvicorn irt_cat_engine.api.main:app --reload --host 0.0.0.0 --port 8000
 
 - API 문서: http://localhost:8000/docs (Swagger UI)
 - 헬스 체크: http://localhost:8000/health
+- 메트릭: http://localhost:8000/metrics (Prometheus)
+
+### 문항 생성 점수 메트릭 기록 (루프 코드에서 호출)
+
+문항 생성 루프(별도 워커/스크립트)에서 아래 헬퍼를 호출하면 점수/채택률/난이도 오차를 Prometheus로 수집할 수 있습니다.
+
+```python
+from irt_cat_engine.middleware.metrics import record_item_generation
+
+# 문항 1개 생성 완료 시
+record_item_generation(
+  score=87.5,
+  accepted=True,
+  stage="final",       # draft/review/final
+  model="gpt-4.1-mini",# 모델명(소수 고정값만 권장)
+  exam_type="csat",
+  target_difficulty=0.8,
+  actual_difficulty=1.1,
+)
+```
+
+생성되는 주요 메트릭:
+
+- `item_generation_score` (Histogram)
+- `item_generation_target_gap` (Histogram)
+- `item_generation_accepted_total` (Counter)
+- `item_generation_rejected_total` (Counter)
 
 ### 3. 프론트엔드 설치 및 실행
 
