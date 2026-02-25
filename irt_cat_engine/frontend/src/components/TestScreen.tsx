@@ -13,6 +13,12 @@ interface Props {
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
 
+// Convert first letter to lowercase for display
+function lowercaseFirstLetter(text: string): string {
+  if (!text) return text;
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
 export default function TestScreen({ item, progress, onAnswer, loading }: Props) {
   const { lang } = useLang();
   const [selected, setSelected] = useState<string | null>(null);
@@ -106,7 +112,7 @@ export default function TestScreen({ item, progress, onAnswer, loading }: Props)
                 disabled={showResult || loading}
               >
                 <span className="option-number">{OPTION_LABELS[i]}</span>
-                {opt}
+                {lowercaseFirstLetter(opt)}
               </button>
             );
           })}

@@ -19,11 +19,12 @@ GUESSING_C_BINARY = 0.40       # 3PL mode: binary items (Type 6 collocation)
 MIN_SESSIONS_FOR_3PL = 5000    # Minimum accumulated sessions before enabling 3PL
 
 # Difficulty (b) initialization weights
-B_WEIGHT_CEFR = 0.35
-B_WEIGHT_FREQ = 0.25
-B_WEIGHT_GSE = 0.20
-B_WEIGHT_CURRICULUM = 0.10
-B_WEIGHT_LEXILE = 0.10
+# Updated 2026-02-25: Prioritize Korean curriculum + frequency (80% combined)
+B_WEIGHT_CEFR = 0.10           # CEFR level (European standard)
+B_WEIGHT_FREQ = 0.40           # Frequency rank (40%)
+B_WEIGHT_GSE = 0.10            # Pearson Global Scale
+B_WEIGHT_CURRICULUM = 0.40     # Korean curriculum (40%)
+B_WEIGHT_LEXILE = 0.00         # Lexile (disabled)
 
 # CEFR to numeric mapping
 CEFR_NUMERIC = {"A1": 0.0, "A2": 0.2, "B1": 0.45, "B2": 0.7, "C1": 0.95}
@@ -32,13 +33,15 @@ CEFR_NUMERIC = {"A1": 0.0, "A2": 0.2, "B1": 0.45, "B2": 0.7, "C1": 0.95}
 CURRICULUM_NUMERIC = {"초등": 0.1, "중등": 0.45, "고등": 0.75, "기타": 0.95}
 
 # Question type difficulty modifiers
+# Updated 2026-02-25: Adjusted for EFL learners' cognitive difficulty
+# EFL difficulty order: 1 (easiest) → 3 → 4 → 5 ≈ 2 (hardest)
 QUESTION_TYPE_B_MODIFIER = {
-    1: 0.0,   # Korean meaning recognition (baseline)
-    2: 0.3,   # English definition matching
-    3: 0.4,   # Synonym selection
-    4: 0.5,   # Antonym selection
-    5: 0.6,   # Sentence completion
-    6: 0.2,   # Collocation judgment
+    1: 0.0,   # Korean meaning recognition (baseline - easiest for EFL)
+    2: 0.6,   # English definition matching (hardest - requires English-to-English)
+    3: 0.2,   # Synonym selection (2nd easiest - L1 mediation possible)
+    4: 0.3,   # Antonym selection (moderate - conceptual understanding needed)
+    5: 0.5,   # Sentence completion (hard - contextual usage required)
+    6: 0.2,   # Collocation judgment (similar to synonyms)
 }
 
 # Discrimination (a) factors
