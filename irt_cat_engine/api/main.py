@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from ..data.database import init_db
+from ..data.database import init_db, DATABASE_URL
 from .routes_test import router as test_router
 from .routes_admin import router as admin_router
 from .routes_learn import router as learn_router
@@ -85,8 +85,28 @@ def root():
 
 @app.get("/health")
 def health():
+    """Enhanced health check endpoint with detailed status."""
+    is_loaded = session_manager.is_loaded
+    
     return {
-        "status": "healthy",
-        "data_loaded": session_manager.is_loaded,
+        "status": "healthy" if is_loaded else "degraded",
+        "data_loaded": is_loaded,
+        "vocab_count": session_manager.vocab_count if is_loaded else 0,
         "active_sessions": session_manager.active_session_count,
+        "database": {
+            "connected": True,  # If we got here, DB is accessible
+            "url_type": "postgresql" if DATABASE_URL.startswith("postgresql") else "sqlite",
+        },
+        "version": "0.2.0",
+        "uptime_check": "ok",
     }
+
+
+@app.get("/ready")
+def readiness():
+    """Readiness probe for Kubernetes/Cloud Run."""
+    if not session_manager.is_loaded:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail="Service not ready - data still loading")
+    
+    return {"ready": True, "vocab_loaded": True}

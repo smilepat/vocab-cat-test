@@ -1,28 +1,63 @@
 """SQLAlchemy database engine and session management.
 
 Uses SQLite for development, easily swappable to PostgreSQL for production.
+Database URL is configured via DATABASE_URL environment variable.
 """
+import os
+import logging
 from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
+logger = logging.getLogger("irt_cat_engine.database")
+
 DB_DIR = Path(__file__).parent.parent / "db"
 DB_DIR.mkdir(exist_ok=True)
-DATABASE_URL = f"sqlite:///{DB_DIR / 'irt_cat.db'}"
+
+DEFAULT_DATABASE_URL = f"sqlite:///{DB_DIR / 'irt_cat.db'}"
+
+
+def get_database_url() -> str:
+    """Get database URL from environment or use default SQLite."""
+    db_url = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+    
+    # Handle special case for SQLite file paths
+    if db_url.startswith("sqlite:///") and not db_url.startswith("sqlite:////"):
+        # Relative path - make it absolute if needed
+        if not Path(db_url.replace("sqlite:///", "")).is_absolute():
+            db_path = DB_DIR / db_url.replace("sqlite:///./irt_cat_engine/db/", "").replace("sqlite:///", "")
+            db_url = f"sqlite:///{db_path}"
+    
+    logger.info(f"Using database: {db_url.split('@')[-1] if '@' in db_url else db_url}")
+    return db_url
 
 
 class Base(DeclarativeBase):
     pass
 
 
-engine = create_engine(DATABASE_URL, echo=False)
+# Create engine with environment-based URL
+DATABASE_URL = get_database_url()
+engine_kwargs = {"echo": False}
+
+# PostgreSQL-specific optimizations
+if DATABASE_URL.startswith("postgresql"):
+    engine_kwargs.update({
+        "pool_pre_ping": True,  # Verify connections before using
+        "pool_size": 10,
+        "max_overflow": 20,
+    })
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
 def init_db():
     """Create all tables."""
+    logger.info("Initializing database tables...")
     Base.metadata.create_all(bind=engine)
+    logger.info("Database tables initialized successfully")
 
 
 def get_db() -> Session:
