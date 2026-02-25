@@ -3,9 +3,16 @@ import os
 import threading
 import logging
 
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
+
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..data.database import init_db, DATABASE_URL
@@ -14,10 +21,39 @@ from .routes_admin import router as admin_router
 from .routes_learn import router as learn_router
 from .session_manager import session_manager
 from ..logging_config import setup_logging
+from ..middleware.metrics import PrometheusMiddleware, get_metrics
+from ..middleware.logging import RequestLoggingMiddleware
 
 # Initialize logging
 logger = setup_logging()
 
+# Initialize Sentry (optional - only if DSN is provided)
+SENTRY_DSN = os.getenv("SENTRY_DSN")
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            StarletteIntegration(transaction_style="endpoint"),
+            FastApiIntegration(transaction_style="endpoint"),
+        ],
+        traces_sample_rate=0.1,  # 10% of transactions for performance monitoring
+        profiles_sample_rate=0.1,  # 10% for profiling
+        environment=os.getenv("ENVIRONMENT", "development"),
+        release=os.getenv("RELEASE_VERSION", "0.2.0"),
+    )
+    logger.info("Sentry error tracking initialized")
+else:
+    logger.info("Sentry DSN not provided - error tracking disabled")
+
+
+# Initialize rate limiter (optional - only if enabled)
+ENABLE_RATE_LIMITING = os.getenv("ENABLE_RATE_LIMITING", "false").lower() == "true"
+if ENABLE_RATE_LIMITING:
+    limiter = Limiter(key_func=get_remote_address)
+    logger.info("Rate limiting enabled")
+else:
+    limiter = Limiter(key_func=get_remote_address, enabled=False)
+    logger.info("Rate limiting disabled")
 
 # Get allowed origins from environment variable
 # Default includes localhost for development
@@ -57,6 +93,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Add rate limiter state and exception handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # CORS - Secure configuration
 # Only allow specific origins, not wildcard
 app.add_middleware(
@@ -66,6 +106,18 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],  # Only necessary methods
     allow_headers=["Content-Type", "Accept"],  # Specific headers only
 )
+
+# Request logging middleware
+app.add_middleware(RequestLoggingMiddleware)
+
+# Prometheus metrics middleware
+app.add_middleware(PrometheusMiddleware)
+
+# Metrics endpoint
+@app.get("/metrics")
+def metrics():
+    """Prometheus metrics endpoint."""
+    return get_metrics()
 
 # Routes
 app.include_router(test_router)
