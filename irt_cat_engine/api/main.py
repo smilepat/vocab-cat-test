@@ -1,5 +1,7 @@
 """FastAPI application for IRT CAT Engine."""
+import os
 import threading
+import logging
 
 from contextlib import asynccontextmanager
 
@@ -11,6 +13,18 @@ from .routes_test import router as test_router
 from .routes_admin import router as admin_router
 from .routes_learn import router as learn_router
 from .session_manager import session_manager
+from ..logging_config import setup_logging
+
+# Initialize logging
+logger = setup_logging()
+
+
+# Get allowed origins from environment variable
+# Default includes localhost for development
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173,http://localhost:8000,https://vocab-cat-test.vercel.app"
+).split(",")
 
 
 @asynccontextmanager
@@ -28,7 +42,7 @@ async def lifespan(app: FastAPI):
     loader.join(timeout=60)  # Wait up to 60s for data load
 
     if not session_manager.is_loaded:
-        print("WARNING: Vocabulary data not loaded yet. Loading continues in background.")
+        logger.warning("Vocabulary data not loaded yet. Loading continues in background.")
 
     yield
 
@@ -43,13 +57,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+# CORS - Secure configuration
+# Only allow specific origins, not wildcard
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,  # Changed from True - credentials not needed
+    allow_methods=["GET", "POST", "OPTIONS"],  # Only necessary methods
+    allow_headers=["Content-Type", "Accept"],  # Specific headers only
 )
 
 # Routes

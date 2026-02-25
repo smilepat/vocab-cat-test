@@ -1,5 +1,6 @@
 """Pydantic schemas for API request/response models."""
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from typing import Literal
 
 
 # ── Request Models ──
@@ -7,19 +8,51 @@ from pydantic import BaseModel, Field
 class TestStartRequest(BaseModel):
     """Request to start a new test session."""
     user_id: str | None = None
-    nickname: str | None = None
-    grade: str = Field(default="중2", description="학년: 초3-4, 초5-6, 중1, 중2, 중3, 고1, 고2, 고3, 대학, 성인")
-    self_assess: str = Field(default="intermediate", description="자기평가: beginner, intermediate, advanced")
-    exam_experience: str = Field(default="none", description="시험경험: none, 내신, 수능, TOEIC, TOEFL")
-    question_type: int = Field(default=0, description="문항유형: 0=혼합(추천), 1-6 개별 유형")
+    nickname: str | None = Field(None, max_length=100, description="사용자 닉네임 (최대 100자)")
+    grade: Literal["초3-4", "초5-6", "중1", "중2", "중3", "고1", "고2", "고3", "대학", "성인"] = Field(
+        default="중2", 
+        description="학년"
+    )
+    self_assess: Literal["beginner", "intermediate", "advanced"] = Field(
+        default="intermediate", 
+        description="자기평가"
+    )
+    exam_experience: Literal["none", "내신", "수능", "TOEIC", "TOEFL"] = Field(
+        default="none", 
+        description="시험경험"
+    )
+    question_type: int = Field(
+        default=0, 
+        ge=0, 
+        le=6, 
+        description="문항유형: 0=혼합(추천), 1-6 개별 유형"
+    )
+    
+    @field_validator('nickname')
+    @classmethod
+    def validate_nickname(cls, v: str | None) -> str | None:
+        """Validate nickname is not empty or whitespace-only."""
+        if v is not None:
+            v = v.strip()
+            if len(v) == 0:
+                raise ValueError('Nickname cannot be empty or whitespace-only')
+        return v
 
 
 class TestRespondRequest(BaseModel):
     """Request to submit a response."""
-    item_id: int
+    item_id: int = Field(..., ge=0, description="Item ID (must be non-negative)")
     is_correct: bool
     is_dont_know: bool = False
-    response_time_ms: int | None = None
+    response_time_ms: int | None = Field(None, ge=0, description="Response time in milliseconds (must be non-negative)")
+    
+    @field_validator('response_time_ms')
+    @classmethod
+    def validate_response_time(cls, v: int | None) -> int | None:
+        """Validate response time is reasonable (< 10 minutes)."""
+        if v is not None and v > 600000:  # 10 minutes
+            raise ValueError('Response time cannot exceed 10 minutes (600000ms)')
+        return v
 
 
 # ── Response Models ──

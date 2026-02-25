@@ -4,6 +4,7 @@ Active test sessions live in memory for low-latency item selection.
 Completed sessions are persisted to the database.
 This can be swapped with a Redis-backed implementation later.
 """
+import logging
 import random
 import time
 from dataclasses import dataclass, field
@@ -18,6 +19,8 @@ from ..item_bank.distractor_engine import DistractorEngine
 from ..item_bank.parameter_initializer import initialize_item_parameters
 from ..config import QUESTION_TYPE_B_MODIFIER
 from ..models.irt_2pl import ItemParameters
+
+logger = logging.getLogger("irt_cat_engine.session_manager")
 
 
 @dataclass
@@ -55,8 +58,11 @@ class SessionManager:
         # Load graph for Strategy D distractors (optional, non-blocking)
         try:
             vocab_graph.load()
-        except Exception:
-            pass  # Graph is optional enhancement
+            logger.info("Vocabulary graph loaded successfully")
+        except FileNotFoundError:
+            logger.warning("vocabulary_graph.json not found - enhanced distractors disabled")
+        except Exception as e:
+            logger.error(f"Failed to load vocabulary graph: {e}", exc_info=True)
 
         self._distractor_engine = DistractorEngine(
             self._vocab,
