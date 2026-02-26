@@ -158,6 +158,53 @@ volumes:
 docker-compose up -d
 ```
 
+### 4. 모니터링 스택(Prometheus + Grafana)
+
+현재 저장소의 `docker-compose.yml`에는 모니터링 서비스가 포함되어 있습니다.
+
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000 (기본 계정: `admin` / `admin`)
+- Alertmanager: http://localhost:9093
+- Backend metrics: http://localhost:8000/metrics
+
+실행:
+
+```bash
+docker compose up -d backend prometheus alertmanager grafana
+```
+
+초기 기동 후 Grafana에 `Item Generation Overview` 대시보드가 자동 로드됩니다.
+
+관련 설정 파일:
+
+- `monitoring/prometheus/prometheus.yml`
+- `monitoring/prometheus/alerts.yml`
+- `monitoring/alertmanager/alertmanager.yml`
+- `monitoring/grafana/provisioning/datasources/prometheus.yml`
+- `monitoring/grafana/provisioning/dashboards/dashboards.yml`
+- `monitoring/grafana/dashboards/item-generation-overview.json`
+
+#### Slack 알림 연동 (선택)
+
+기본 Alertmanager 설정은 로컬 확인용 수신기(`default-log`)를 사용합니다.
+Slack 연동이 필요하면 `.env`에 아래 값을 설정합니다.
+
+```env
+ALERT_ROUTE_RECEIVER=slack
+ALERT_SLACK_WEBHOOK_URL=https://hooks.slack.com/services/XXX/YYY/ZZZ
+```
+
+설정 반영:
+
+```bash
+docker compose up -d alertmanager
+```
+
+운영 권장:
+
+- 경고(`warning`)와 치명(`critical`)을 다른 채널로 분리
+- `repeat_interval`을 팀 운영 시간에 맞게 조정
+
 ---
 
 ## Google Cloud Run 배포

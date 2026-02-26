@@ -1,12 +1,25 @@
-"""API routes for learning recommendations."""
+"""API routes for learning recommendations and goal-based learning."""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..data.database import get_db
-from ..data.db_models import TestSession
+from ..data.db_models import TestSession, GoalLearningSession
 from ..reporting.recommendation_engine import generate_study_plan
 from ..reporting.matrix_generator import compute_vocab_matrix
+from ..learning.goal_learning_service import (
+    start_goal_learning_session,
+    get_next_word_to_learn,
+    submit_learning_card,
+)
 from .session_manager import session_manager
+from .schemas import (
+    GoalLearningStartRequest,
+    GoalLearningStartResponse,
+    GoalLearningSubmitRequest,
+    GoalLearningSubmitResponse,
+    LearningCardResponse,
+    GoalSessionProgress,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["learn"])
 
@@ -65,4 +78,227 @@ def get_vocab_matrix(session_id: str, db: Session = Depends(get_db)):
         vocab_words=vocab_words,
         item_bank=item_bank,
         sample_size=100,
+    )
+
+
+# ── Goal-Based Learning Endpoints ──
+
+@router.post("/learn/goal/start", response_model=GoalLearningStartResponse)
+def start_goal_learning(request: GoalLearningStartRequest, db: Session = Depends(get_db)):
+    """Start a new goal-based learning session."""
+    if not session_manager.is_loaded:
+        raise HTTPException(status_code=503, detail="Server is still loading data")
+
+    try:
+        session, user = start_goal_learning_session(
+            db=db,
+            user_id=request.user_id,
+            nickname=request.nickname,
+            goal_id=request.goal_id,
+            goal_name=request.goal_name,
+            target_word_count=request.target_word_count,
+        )
+
+        # Get the first learning card
+        vocab_words = session_manager._vocab
+        word_data, question_type, is_first = get_next_word_to_learn(
+            db=db,
+            session_id=session.id,
+            vocab_words=vocab_words,
+        )
+
+        # Generate test item using distractor engine
+        # word_data is a VocabWord object
+        item = session_manager._distractor_engine.generate_item(word_data, question_type=question_type)
+        if not item:
+            # Fallback to type 1 if the requested type fails
+            item = session_manager._distractor_engine.generate_item(word_data, question_type=1)
+
+        first_card = LearningCardResponse(
+            word=word_data.word_display,
+            question_type=question_type,
+            stem=item.get("stem"),
+            correct_answer=item.get("correct_answer"),
+            options=item.get("options"),
+            pos=word_data.pos or "",
+            cefr=word_data.cefr or "",
+            meaning_ko=word_data.meaning_ko or "",
+            dvk_level=1,
+            review_count=0,
+            is_first_exposure=is_first,
+        )
+
+        return GoalLearningStartResponse(
+            session_id=session.id,
+            user_id=user.id,
+            goal_id=session.goal_id,
+            goal_name=session.goal_name,
+            target_word_count=session.target_word_count,
+            first_card=first_card,
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/learn/goal/{session_id}/next", response_model=LearningCardResponse)
+def get_next_learning_card(session_id: str, db: Session = Depends(get_db)):
+    """Get the next learning card for a session."""
+    if not session_manager.is_loaded:
+        raise HTTPException(status_code=503, detail="Server is still loading data")
+
+    session = db.get(GoalLearningSession, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    try:
+        vocab_words = session_manager._vocab
+        word_data, question_type, is_first = get_next_word_to_learn(
+            db=db,
+            session_id=session_id,
+            vocab_words=vocab_words,
+        )
+
+        # Generate test item using distractor engine
+        # word_data is a VocabWord object
+        item = session_manager._distractor_engine.generate_item(word_data, question_type=question_type)
+        if not item:
+            item = session_manager._distractor_engine.generate_item(word_data, question_type=1)
+
+        # Get existing learned word data if available
+        from ..data.db_models import LearnedWord
+        learned_word = db.query(LearnedWord).filter(
+            LearnedWord.session_id == session_id,
+            LearnedWord.word == word_data.word_display,
+        ).first()
+
+        dvk_level = learned_word.dvk_level if learned_word else 1
+        review_count = learned_word.review_count if learned_word else 0
+
+        return LearningCardResponse(
+            word=word_data.word_display,
+            question_type=question_type,
+            stem=item.get("stem"),
+            correct_answer=item.get("correct_answer"),
+            options=item.get("options"),
+            pos=word_data.pos or "",
+            cefr=word_data.cefr or "",
+            meaning_ko=word_data.meaning_ko or "",
+            dvk_level=dvk_level,
+            review_count=review_count,
+            is_first_exposure=is_first,
+        )
+
+    except StopIteration as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/learn/goal/{session_id}/submit", response_model=GoalLearningSubmitResponse)
+def submit_goal_learning_card(
+    session_id: str,
+    request: GoalLearningSubmitRequest,
+    db: Session = Depends(get_db),
+):
+    """Submit a learning card response and get the next card."""
+    if not session_manager.is_loaded:
+        raise HTTPException(status_code=503, detail="Server is still loading data")
+
+    session = db.get(GoalLearningSession, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    try:
+        # Submit the current card
+        submit_learning_card(
+            db=db,
+            session_id=session_id,
+            word=request.word,
+            question_type=request.question_type,
+            self_rating=request.self_rating,
+            is_correct=request.is_correct,
+            response_time_ms=request.response_time_ms,
+        )
+
+        # Refresh session to get updated stats
+        db.refresh(session)
+
+        # Get next card
+        try:
+            vocab_words = session_manager._vocab
+            word_data, question_type, is_first = get_next_word_to_learn(
+                db=db,
+                session_id=session_id,
+                vocab_words=vocab_words,
+            )
+
+            # Generate test item using distractor engine
+            # word_data is a VocabWord object
+            item = session_manager._distractor_engine.generate_item(word_data, question_type=question_type)
+            if not item:
+                item = session_manager._distractor_engine.generate_item(word_data, question_type=1)
+
+            # Get learned word data
+            from ..data.db_models import LearnedWord
+            learned_word = db.query(LearnedWord).filter(
+                LearnedWord.session_id == session_id,
+                LearnedWord.word == word_data.word_display,
+            ).first()
+
+            dvk_level = learned_word.dvk_level if learned_word else 1
+            review_count = learned_word.review_count if learned_word else 0
+
+            next_card = LearningCardResponse(
+                word=word_data.word_display,
+                question_type=question_type,
+                stem=item.get("stem"),
+                correct_answer=item.get("correct_answer"),
+                options=item.get("options"),
+                pos=word_data.pos or "",
+                cefr=word_data.cefr or "",
+                meaning_ko=word_data.meaning_ko or "",
+                dvk_level=dvk_level,
+                review_count=review_count,
+                is_first_exposure=is_first,
+            )
+        except StopIteration:
+            # All words mastered
+            next_card = None
+
+        # Calculate progress
+        completion_pct = (session.words_mastered / session.target_word_count * 100) if session.target_word_count > 0 else 0
+
+        progress = GoalSessionProgress(
+            words_studied=session.words_studied,
+            words_mastered=session.words_mastered,
+            total_reviews=session.total_reviews,
+            target_word_count=session.target_word_count,
+            completion_percentage=min(100.0, completion_pct),
+        )
+
+        return GoalLearningSubmitResponse(
+            next_card=next_card,
+            session_progress=progress,
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/learn/goal/{session_id}/progress", response_model=GoalSessionProgress)
+def get_goal_learning_progress(session_id: str, db: Session = Depends(get_db)):
+    """Get current progress for a goal-based learning session."""
+    session = db.get(GoalLearningSession, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    completion_pct = (session.words_mastered / session.target_word_count * 100) if session.target_word_count > 0 else 0
+
+    return GoalSessionProgress(
+        words_studied=session.words_studied,
+        words_mastered=session.words_mastered,
+        total_reviews=session.total_reviews,
+        target_word_count=session.target_word_count,
+        completion_percentage=min(100.0, completion_pct),
     )

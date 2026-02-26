@@ -153,6 +153,8 @@ class SessionManager:
             "pos": item.pos,
             "cefr": item.cefr,
             "explanation": explanation,
+            "generation_score": result.get("generation_score"),
+            "generation_model": result.get("generation_model"),
         }
 
     def choose_question_type(

@@ -23,10 +23,25 @@ body {
 }
 
 .app {
-  max-width: 640px;
+  max-width: 640px;  /* Mobile default */
   margin: 0 auto;
   padding: 20px 16px;
   min-height: 100vh;
+}
+
+/* Responsive breakpoints for wider screens */
+@media (min-width: 768px) {
+  .app {
+    max-width: 900px;  /* Tablet */
+    padding: 24px 32px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app {
+    max-width: 1200px;  /* Desktop */
+    padding: 32px 48px;
+  }
 }
 
 /* Language toggle */
@@ -202,6 +217,24 @@ body {
 }
 .primary-btn:hover { opacity: 0.9; }
 .primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.secondary-btn {
+  width: 100%;
+  padding: 14px;
+  background: white;
+  color: var(--primary);
+  border: 2px solid var(--primary);
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 50px;
+}
+.secondary-btn:hover {
+  background: #f8fafc;
+  border-color: var(--primary-light);
+}
 
 /* Test Screen */
 .test-header {

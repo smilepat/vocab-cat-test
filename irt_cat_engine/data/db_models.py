@@ -93,3 +93,58 @@ class ItemExposure(Base):
     admin_count = Column(Integer, nullable=False, default=0)
     correct_count = Column(Integer, nullable=False, default=0)
     last_administered = Column(DateTime, nullable=True)
+
+
+class GoalLearningSession(Base):
+    """Goal-based learning session (e.g., elementary, middle school vocabulary)."""
+    __tablename__ = "goal_learning_sessions"
+
+    id = Column(String(32), primary_key=True, default=_uuid)
+    user_id = Column(String(32), ForeignKey("users.id"), nullable=False)
+    goal_id = Column(String(50), nullable=False)  # "elementary", "middle", "high", etc.
+    goal_name = Column(String(100), nullable=False)
+    target_word_count = Column(Integer, nullable=False)
+
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_activity_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime, nullable=True)
+
+    # Progress tracking
+    words_studied = Column(Integer, nullable=False, default=0)
+    words_mastered = Column(Integer, nullable=False, default=0)
+    total_reviews = Column(Integer, nullable=False, default=0)
+
+    user = relationship("User", backref="goal_sessions")
+    learned_words = relationship("LearnedWord", back_populates="session", order_by="LearnedWord.last_reviewed_at.desc()")
+
+
+class LearnedWord(Base):
+    """Track individual words learned in goal-based sessions."""
+    __tablename__ = "learned_words"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(32), ForeignKey("goal_learning_sessions.id"), nullable=False)
+    word = Column(String(100), nullable=False)
+
+    # First exposure
+    first_seen_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    first_question_type = Column(Integer, nullable=False)
+
+    # Current learning state
+    dvk_level = Column(Integer, nullable=False, default=1)  # 1-6: Recognition to Production
+    review_count = Column(Integer, nullable=False, default=0)
+    correct_count = Column(Integer, nullable=False, default=0)
+    last_reviewed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Spaced repetition data
+    next_review_at = Column(DateTime, nullable=True)
+    ease_factor = Column(Float, nullable=False, default=2.5)  # SM-2 algorithm
+    interval_days = Column(Float, nullable=False, default=0.0)
+
+    # Self-assessment history (JSON array of {date, rating, question_type})
+    assessment_history = Column(JSON, nullable=True)
+
+    is_mastered = Column(Boolean, nullable=False, default=False)
+    mastered_at = Column(DateTime, nullable=True)
+
+    session = relationship("GoalLearningSession", back_populates="learned_words")

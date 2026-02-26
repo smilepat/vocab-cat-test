@@ -1,0 +1,61 @@
+groups:
+  - name: platform-alerts
+    rules:
+      - alert: BackendDown
+        expr: up{job="vocab-cat-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: irt-cat-engine
+        annotations:
+          summary: "백엔드가 응답하지 않습니다"
+          description: "vocab-cat-backend 타겟 스크랩이 2분 이상 실패했습니다."
+
+      - alert: BackendMetricsStale
+        expr: time() - max(timestamp(http_requests_total{job="vocab-cat-backend"})) > 300
+        for: 5m
+        labels:
+          severity: warning
+          service: irt-cat-engine
+        annotations:
+          summary: "메트릭 수집이 지연되고 있습니다"
+          description: "최근 5분 이상 http_requests_total 메트릭 갱신이 없습니다."
+
+  - name: item-generation-alerts
+    rules:
+      - alert: ItemGenerationHighFailureRate
+        expr: |
+          (
+            sum(rate(item_generation_rejected_total[10m]))
+            /
+            clamp_min(sum(rate(item_generation_accepted_total[10m]) + rate(item_generation_rejected_total[10m])), 1e-9)
+          ) > 0.30
+        for: 10m
+        labels:
+          severity: warning
+          service: irt-cat-engine
+        annotations:
+          summary: "문항 생성 실패율이 높습니다"
+          description: "최근 10분 기준 문항 생성 실패율이 30%를 초과했습니다."
+
+      - alert: ItemGenerationLowScoreP95
+        expr: |
+          histogram_quantile(0.95, sum(rate(item_generation_score_bucket[10m])) by (le)) < 70
+        for: 10m
+        labels:
+          severity: warning
+          service: irt-cat-engine
+        annotations:
+          summary: "문항 생성 점수 p95 저하"
+          description: "최근 10분 기준 문항 생성 점수 p95가 70 미만입니다."
+
+      - alert: ItemGenerationHighTargetGapP90
+        expr: |
+          histogram_quantile(0.90, sum(rate(item_generation_target_gap_bucket[10m])) by (le)) > 5
+        for: 10m
+        labels:
+          severity: warning
+          service: irt-cat-engine
+        annotations:
+          summary: "목표 난이도 오차가 큽니다"
+          description: "최근 10분 기준 목표-실제 난이도 오차 p90이 5를 초과했습니다."

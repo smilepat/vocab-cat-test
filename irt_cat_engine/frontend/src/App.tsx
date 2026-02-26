@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import SurveyScreen from "./components/SurveyScreen";
 import TestScreen from "./components/TestScreen";
 import ResultsScreen from "./components/ResultsScreen";
+import GoalLearningScreen from "./components/GoalLearningScreen";
 import { LangProvider, useLang } from "./i18n/LangContext";
 import { t } from "./i18n/translations";
 import { apiPost } from "./hooks/useApi";
@@ -11,10 +12,16 @@ import type {
   TestResults,
   ItemResponse,
   TestProgress,
+  GoalLearningStartRequest,
+  GoalLearningStartResponse,
+  GoalLearningSubmitRequest,
+  GoalLearningSubmitResponse,
+  LearningCard,
+  GoalSessionProgress,
 } from "./types/api";
 import "./App.css";
 
-type Screen = "survey" | "test" | "results";
+type Screen = "survey" | "test" | "results" | "goal-learning";
 
 function AppInner() {
   const { lang, toggle } = useLang();
@@ -27,6 +34,13 @@ function AppInner() {
   const [currentItem, setCurrentItem] = useState<ItemResponse | null>(null);
   const [progress, setProgress] = useState<TestProgress | null>(null);
   const [results, setResults] = useState<TestResults | null>(null);
+
+  // Goal-based learning state
+  const [goalSessionId, setGoalSessionId] = useState("");
+  const [goalName, setGoalName] = useState("");
+  const [targetWordCount, setTargetWordCount] = useState(0);
+  const [currentCard, setCurrentCard] = useState<LearningCard | null>(null);
+  const [goalProgress, setGoalProgress] = useState<GoalSessionProgress | null>(null);
 
   const handleStart = useCallback(
     async (profile: {
@@ -85,6 +99,78 @@ function AppInner() {
     [sessionId, lang]
   );
 
+  const handleStartGoalLearning = useCallback(
+    async (goal: { id: string; name: string; count: number; nickname?: string }) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const request: GoalLearningStartRequest = {
+          goal_id: goal.id,
+          goal_name: goal.name,
+          target_word_count: goal.count,
+          nickname: goal.nickname,
+        };
+
+        const data = await apiPost<GoalLearningStartResponse>("/learn/goal/start", request);
+        setGoalSessionId(data.session_id);
+        setUserId(data.user_id);
+        setGoalName(data.goal_name);
+        setTargetWordCount(data.target_word_count);
+        setCurrentCard(data.first_card);
+        setGoalProgress({
+          words_studied: 0,
+          words_mastered: 0,
+          total_reviews: 0,
+          target_word_count: data.target_word_count,
+          completion_percentage: 0,
+        });
+        setScreen("goal-learning");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : t("serverError", lang));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [lang]
+  );
+
+  const handleSubmitCard = useCallback(
+    async (selfRating: number, isCorrect: boolean) => {
+      if (!currentCard) return;
+
+      setLoading(true);
+      setError(null);
+      try {
+        const request: GoalLearningSubmitRequest = {
+          word: currentCard.word,
+          question_type: currentCard.question_type,
+          self_rating: selfRating,
+          is_correct: isCorrect,
+        };
+
+        const data = await apiPost<GoalLearningSubmitResponse>(
+          `/learn/goal/${goalSessionId}/submit`,
+          request
+        );
+
+        setGoalProgress(data.session_progress);
+
+        if (data.next_card) {
+          setCurrentCard(data.next_card);
+        } else {
+          // All words mastered!
+          alert(lang === "ko" ? "축하합니다! 모든 단어를 마스터했습니다!" : "Congratulations! You've mastered all words!");
+          handleRestart();
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : t("responseFailed", lang));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [currentCard, goalSessionId, lang]
+  );
+
   const handleRestart = useCallback(() => {
     setScreen("survey");
     setSessionId("");
@@ -92,6 +178,11 @@ function AppInner() {
     setCurrentItem(null);
     setProgress(null);
     setResults(null);
+    setGoalSessionId("");
+    setGoalName("");
+    setTargetWordCount(0);
+    setCurrentCard(null);
+    setGoalProgress(null);
     setError(null);
   }, []);
 
@@ -111,7 +202,11 @@ function AppInner() {
       )}
 
       {screen === "survey" && (
-        <SurveyScreen onStart={handleStart} loading={loading} />
+        <SurveyScreen
+          onStart={handleStart}
+          onStartGoalLearning={handleStartGoalLearning}
+          loading={loading}
+        />
       )}
 
       {screen === "test" && currentItem && progress && (
@@ -120,6 +215,19 @@ function AppInner() {
           progress={progress}
           onAnswer={handleAnswer}
           loading={loading}
+        />
+      )}
+
+      {screen === "goal-learning" && currentCard && goalProgress && (
+        <GoalLearningScreen
+          lang={lang}
+          sessionId={goalSessionId}
+          goalName={goalName}
+          targetWordCount={targetWordCount}
+          currentCard={currentCard}
+          progress={goalProgress}
+          onSubmit={handleSubmitCard}
+          onExit={handleRestart}
         />
       )}
 

@@ -110,6 +110,50 @@ record_item_generation(
 - `item_generation_accepted_total` (Counter)
 - `item_generation_rejected_total` (Counter)
 
+참고:
+
+- 현재 CAT API 루프(`start`/`respond`)에서도 문항 생성 성공/실패 메트릭이 자동 기록됩니다.
+- 생성기가 `generation_score`, `generation_model` 값을 반환하면 해당 값이 그대로 수집됩니다.
+
+### 운영용 PromQL 예시 (문항 생성 모니터링)
+
+아래 쿼리는 Grafana 패널/알림 규칙에 바로 사용할 수 있습니다.
+
+```promql
+# 1) 최근 10분 생성 실패율
+sum(rate(item_generation_rejected_total[10m]))
+/
+sum(rate(item_generation_accepted_total[10m]) + rate(item_generation_rejected_total[10m]))
+
+# 2) 최근 10분 생성 점수 평균
+sum(rate(item_generation_score_sum[10m]))
+/
+sum(rate(item_generation_score_count[10m]))
+
+# 3) 최근 10분 생성 점수 p95
+histogram_quantile(
+  0.95,
+  sum(rate(item_generation_score_bucket[10m])) by (le)
+)
+
+# 4) 최근 10분 목표-실제 난이도 오차 p90
+histogram_quantile(
+  0.90,
+  sum(rate(item_generation_target_gap_bucket[10m])) by (le)
+)
+
+# 5) 모델별 생성 점수 평균(최근 10분)
+sum(rate(item_generation_score_sum[10m])) by (model)
+/
+sum(rate(item_generation_score_count[10m])) by (model)
+```
+
+권장 알림 임계치(초기값):
+
+- 실패율 > 0.30 (10분 지속)
+- 생성 점수 p95 < 70 (10분 지속)
+- 난이도 오차 p90 > 5 (10분 지속)
+
 ### 3. 프론트엔드 설치 및 실행
 
 ```bash

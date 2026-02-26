@@ -68,8 +68,69 @@ services:
     depends_on:
       - backend
 
+  # Prometheus monitoring
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: vocab-cat-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    networks:
+      - vocab-network
+    depends_on:
+      - backend
+
+  # Alertmanager
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: vocab-cat-alertmanager
+    ports:
+      - "9093:9093"
+    environment:
+      ALERT_ROUTE_RECEIVER: ${ALERT_ROUTE_RECEIVER:-default-log}
+      ALERT_SLACK_WEBHOOK_URL: ${ALERT_SLACK_WEBHOOK_URL:-}
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--config.expand-env"
+      - "--storage.path=/alertmanager"
+    networks:
+      - vocab-network
+
+  # Grafana dashboard
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: vocab-cat-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - vocab-network
+    depends_on:
+      - prometheus
+      - alertmanager
+
 volumes:
   postgres_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
     driver: local
 
 networks:

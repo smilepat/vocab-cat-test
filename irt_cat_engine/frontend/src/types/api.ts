@@ -131,3 +131,57 @@ export interface VocabMatrixData {
   goal_summary: { counts: MatrixStateCounts; total: number; words_changed: number };
   states: KnowledgeState[];
 }
+
+// Goal-Based Learning types
+
+export interface GoalLearningStartRequest {
+  user_id?: string;
+  nickname?: string;
+  goal_id: string;
+  goal_name: string;
+  target_word_count: number;
+}
+
+export interface LearningCard {
+  word: string;
+  question_type: number;
+  stem: string | null;
+  correct_answer: string | null;
+  options: string[] | null;
+  pos: string;
+  cefr: string;
+  meaning_ko: string;
+  dvk_level: number;
+  review_count: number;
+  is_first_exposure: boolean;
+}
+
+export interface GoalSessionProgress {
+  words_studied: number;
+  words_mastered: number;
+  total_reviews: number;
+  target_word_count: number;
+  completion_percentage: number;
+}
+
+export interface GoalLearningStartResponse {
+  session_id: string;
+  user_id: string;
+  goal_id: string;
+  goal_name: string;
+  target_word_count: number;
+  first_card: LearningCard;
+}
+
+export interface GoalLearningSubmitRequest {
+  word: string;
+  question_type: number;
+  self_rating: number;
+  is_correct: boolean;
+  response_time_ms?: number;
+}
+
+export interface GoalLearningSubmitResponse {
+  next_card: LearningCard | null;
+  session_progress: GoalSessionProgress;
+}

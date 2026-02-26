@@ -1,5 +1,6 @@
 """API routes for test sessions."""
 from datetime import datetime, timezone
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from slowapi import Limiter
@@ -17,8 +18,10 @@ from .schemas import (
     UserHistoryResponse, UserHistoryEntry,
 )
 from .session_manager import session_manager
+from ..middleware.metrics import record_item_generation
 
 router = APIRouter(prefix="/api/v1", tags=["test"])
+logger = logging.getLogger("irt_cat_engine.api.routes_test")
 
 
 def _item_to_response(item_content: dict) -> ItemResponse:
@@ -136,7 +139,31 @@ def start_test(req: TestStartRequest, db: Session = Depends(get_db)):
         first_item_params, question_type=content_qt
     )
     if item_content is None:
+        try:
+            record_item_generation(
+                score=0.0,
+                accepted=False,
+                stage="draft",
+                model="rule-based",
+                exam_type="csat",
+            )
+        except Exception as e:
+            logger.debug("Failed to record item generation metric: %s", e)
         raise HTTPException(status_code=500, detail="Failed to generate item content")
+
+    try:
+        generation_score = float(item_content.get("generation_score", 100.0))
+        record_item_generation(
+            score=generation_score,
+            accepted=True,
+            stage="final",
+            model=str(item_content.get("generation_model", "rule-based")),
+            exam_type="csat",
+            target_difficulty=float(active.cat_session.current_theta),
+            actual_difficulty=float(first_item_params.difficulty_b),
+        )
+    except Exception as e:
+        logger.debug("Failed to record item generation metric: %s", e)
 
     # Store pending item on the active session for later response matching
     active._pending_item = first_item_params
@@ -252,8 +279,32 @@ def respond_to_item(session_id: str, req: TestRespondRequest, db: Session = Depe
         next_item_params, question_type=content_qt
     )
     if item_content is None:
+        try:
+            record_item_generation(
+                score=0.0,
+                accepted=False,
+                stage="draft",
+                model="rule-based",
+                exam_type="csat",
+            )
+        except Exception as e:
+            logger.debug("Failed to record item generation metric: %s", e)
         db.commit()
         raise HTTPException(status_code=500, detail="Failed to generate item content")
+
+    try:
+        generation_score = float(item_content.get("generation_score", 100.0))
+        record_item_generation(
+            score=generation_score,
+            accepted=True,
+            stage="final",
+            model=str(item_content.get("generation_model", "rule-based")),
+            exam_type="csat",
+            target_difficulty=float(cat.current_theta),
+            actual_difficulty=float(next_item_params.difficulty_b),
+        )
+    except Exception as e:
+        logger.debug("Failed to record item generation metric: %s", e)
 
     active._pending_item = next_item_params
     db.commit()

@@ -229,3 +229,67 @@ class VocabMatrixResponse(BaseModel):
     summary: MatrixSummary
     goal_summary: MatrixGoalSummary
     states: list[KnowledgeState]
+
+
+# ── Goal-Based Learning Models ──
+
+class GoalLearningStartRequest(BaseModel):
+    """Request to start a goal-based learning session."""
+    user_id: str | None = None
+    nickname: str | None = Field(None, max_length=100)
+    goal_id: str = Field(..., description="Learning goal ID: elementary, middle, high, suneung, toeic, toefl")
+    goal_name: str = Field(..., description="Display name of the goal")
+    target_word_count: int = Field(..., ge=1, description="Number of words in this goal")
+
+
+class GoalLearningStartResponse(BaseModel):
+    """Response when starting a goal-based learning session."""
+    session_id: str
+    user_id: str
+    goal_id: str
+    goal_name: str
+    target_word_count: int
+    first_card: "LearningCardResponse"
+
+
+class LearningCardResponse(BaseModel):
+    """A learning card (flashcard) for one word."""
+    word: str
+    question_type: int
+    stem: str | None = None
+    correct_answer: str | None = None
+    options: list[str] | None = None
+
+    # Metadata
+    pos: str = ""
+    cefr: str = ""
+    meaning_ko: str = ""
+
+    # Learning progress for this word
+    dvk_level: int = 1
+    review_count: int = 0
+    is_first_exposure: bool = True
+
+
+class GoalLearningSubmitRequest(BaseModel):
+    """Submit self-assessment for a learning card."""
+    word: str
+    question_type: int
+    self_rating: int = Field(..., ge=0, le=3, description="0=forgot, 1=hard, 2=good, 3=easy")
+    is_correct: bool = False
+    response_time_ms: int | None = None
+
+
+class GoalLearningSubmitResponse(BaseModel):
+    """Response after submitting a learning card assessment."""
+    next_card: LearningCardResponse | None = None
+    session_progress: "GoalSessionProgress"
+
+
+class GoalSessionProgress(BaseModel):
+    """Progress in a goal-based learning session."""
+    words_studied: int
+    words_mastered: int
+    total_reviews: int
+    target_word_count: int
+    completion_percentage: float

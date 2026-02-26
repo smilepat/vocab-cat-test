@@ -11,6 +11,7 @@ interface Props {
     exam_experience: string;
     question_type: number;
   }) => void;
+  onStartGoalLearning: (goal: { id: string; name: string; count: number; nickname?: string }) => void;
   loading: boolean;
 }
 
@@ -42,13 +43,24 @@ const QUESTION_TYPE_VALUES = [
   { value: 6, labelKey: "qtype.6" as TranslationKey },
 ];
 
-export default function SurveyScreen({ onStart, loading }: Props) {
+const LEARNING_GOALS = [
+  { id: "elementary", name: "초등 어휘", nameEn: "Elementary Vocabulary", count: 800, available: true },
+  { id: "middle", name: "중학교과 어휘", nameEn: "Middle School Vocabulary", count: 1200, available: true },
+  { id: "high", name: "고등학교 어휘", nameEn: "High School Vocabulary", count: 1000, available: true },
+  { id: "suneung", name: "수능 어휘", nameEn: "CSAT Vocabulary", count: 5000, available: true },
+  { id: "toeic", name: "토익 어휘", nameEn: "TOEIC Vocabulary", count: 0, available: false },
+  { id: "toefl", name: "토플 어휘", nameEn: "TOEFL Vocabulary", count: 0, available: false },
+];
+
+export default function SurveyScreen({ onStart, onStartGoalLearning, loading }: Props) {
   const { lang } = useLang();
   const [nickname, setNickname] = useState("");
   const [grade, setGrade] = useState("중2");
   const [selfAssess, setSelfAssess] = useState("intermediate");
   const [examExp, setExamExp] = useState("none");
   const [questionType, setQuestionType] = useState(0);
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [selectedGoal, setSelectedGoal] = useState<typeof LEARNING_GOALS[0] | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,8 +75,43 @@ export default function SurveyScreen({ onStart, loading }: Props) {
 
   return (
     <div className="screen survey">
-      <h1>{t("appTitle", lang)}</h1>
-      <p className="subtitle">{t("surveySubtitle", lang)}</p>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", marginBottom: "12px", flexWrap: "wrap" }}>
+        <div style={{ flex: "1", minWidth: "200px" }}>
+          <h1 style={{ marginBottom: "8px" }}>{t("appTitle", lang)}</h1>
+          <p className="subtitle" style={{ marginBottom: "0" }}>{t("surveySubtitle", lang)}</p>
+        </div>
+        <button
+          type="button"
+          className="goal-quick-btn"
+          onClick={() => setShowGoalModal(true)}
+          style={{
+            padding: "12px 20px",
+            border: "2px solid var(--primary)",
+            borderRadius: "10px",
+            background: selectedGoal ? "#eef2ff" : "white",
+            color: "var(--primary)",
+            cursor: "pointer",
+            fontSize: "14px",
+            fontWeight: "600",
+            transition: "all 0.2s",
+            whiteSpace: "nowrap",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "4px",
+            minWidth: "180px",
+          }}
+        >
+          <div style={{ fontSize: "16px" }}>📚</div>
+          <div>{lang === "ko" ? "테스트 없이" : "Skip Test"}</div>
+          <div>{lang === "ko" ? "학습목표 설정하기" : "Set Learning Goal"}</div>
+          {selectedGoal && (
+            <div style={{ fontSize: "12px", marginTop: "4px", color: "var(--primary)", fontWeight: "700" }}>
+              ✓ {lang === "ko" ? selectedGoal.name : selectedGoal.nameEn}
+            </div>
+          )}
+        </button>
+      </div>
 
       <div className="feature-cards">
         <div className="feature-card">
@@ -166,10 +213,110 @@ export default function SurveyScreen({ onStart, loading }: Props) {
           </div>
         </div>
 
-        <button type="submit" className="primary-btn" disabled={loading}>
-          {loading ? t("loadingBtn", lang) : t("startBtn", lang)}
-        </button>
+        {selectedGoal ? (
+          <>
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={() => {
+                onStartGoalLearning({
+                  id: selectedGoal.id,
+                  name: lang === "ko" ? selectedGoal.name : selectedGoal.nameEn,
+                  count: selectedGoal.count,
+                  nickname: nickname || (lang === "ko" ? "익명" : "Anonymous"),
+                });
+              }}
+              disabled={loading}
+              style={{ marginTop: "16px" }}
+            >
+              {loading ? t("loadingBtn", lang) : (lang === "ko" ? "🎯 학습 진행" : "🎯 Start Learning")}
+            </button>
+            <button type="submit" className="secondary-btn" disabled={loading} style={{ marginTop: "12px" }}>
+              {loading ? t("loadingBtn", lang) : (lang === "ko" ? "📊 IRT 어휘 진단 테스트" : "📊 IRT Diagnostic Test")}
+            </button>
+          </>
+        ) : (
+          <button type="submit" className="primary-btn" disabled={loading}>
+            {loading ? t("loadingBtn", lang) : t("startBtn", lang)}
+          </button>
+        )}
       </form>
+
+      {/* Learning Goal Modal */}
+      {showGoalModal && (
+        <div className="matrix-modal-overlay" onClick={() => setShowGoalModal(false)}>
+          <div className="matrix-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "500px" }}>
+            <button
+              className="matrix-modal-close"
+              onClick={() => setShowGoalModal(false)}
+            >
+              ×
+            </button>
+            <h2 style={{ fontSize: "22px", fontWeight: "700", marginBottom: "8px" }}>
+              {lang === "ko" ? "학습 목표 선택" : "Choose Learning Goal"}
+            </h2>
+            <p style={{ fontSize: "14px", color: "var(--text-sub)", marginBottom: "20px" }}>
+              {lang === "ko"
+                ? "진단 테스트 없이 바로 어휘 학습을 시작할 수 있습니다."
+                : "Start learning vocabulary directly without a diagnostic test."}
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {LEARNING_GOALS.map((goal) => (
+                <button
+                  key={goal.id}
+                  className={`goal-card ${!goal.available ? "disabled" : ""}`}
+                  disabled={!goal.available}
+                  onClick={() => {
+                    if (goal.available) {
+                      setSelectedGoal(goal);
+                      setShowGoalModal(false);
+                    }
+                  }}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "16px 20px",
+                    border: goal.available ? "2px solid var(--border)" : "2px solid #e5e7eb",
+                    borderRadius: "12px",
+                    background: goal.available ? "var(--card)" : "#f9fafb",
+                    cursor: goal.available ? "pointer" : "not-allowed",
+                    transition: "all 0.2s",
+                    opacity: goal.available ? 1 : 0.5,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (goal.available) {
+                      e.currentTarget.style.borderColor = "var(--primary)";
+                      e.currentTarget.style.background = "#f8fafc";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (goal.available) {
+                      e.currentTarget.style.borderColor = "var(--border)";
+                      e.currentTarget.style.background = "var(--card)";
+                    }
+                  }}
+                >
+                  <div style={{ textAlign: "left" }}>
+                    <div style={{ fontSize: "16px", fontWeight: "600", marginBottom: "4px" }}>
+                      {lang === "ko" ? goal.name : goal.nameEn}
+                    </div>
+                    <div style={{ fontSize: "13px", color: "var(--text-sub)" }}>
+                      {goal.available
+                        ? `${goal.count}${lang === "ko" ? "개 단어" : " words"}`
+                        : lang === "ko" ? "준비 중..." : "Coming soon..."}
+                    </div>
+                  </div>
+                  {goal.available && (
+                    <div style={{ fontSize: "20px", color: "var(--primary)" }}>→</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
