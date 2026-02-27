@@ -286,10 +286,16 @@ class DistractorEngine:
         self,
         target: VocabWord,
         question_type: int,
+        shuffle_options: bool = True,
     ) -> dict | None:
         """Generate a complete test item with question, correct answer, and distractors.
 
-        Returns dict with: stem, correct_answer, distractors, metadata
+        Returns dict with: stem, correct_answer, distractors, options (shuffled), metadata
+
+        Args:
+            target: The vocabulary word to create an item for
+            question_type: Type of question (1-6)
+            shuffle_options: If True, includes shuffled 'options' array in result
 
         Loanwords (e.g. computer→컴퓨터) are redirected from Type 1/2 to Type 3/5
         because their Korean meaning is a transparent transliteration, making the
@@ -308,26 +314,28 @@ class DistractorEngine:
             distractors = self.generate_meaning_distractors(target, n=3, field="meaning_ko")
             if len(distractors) < 3:
                 return None
-            return {
+            result = {
                 "stem": f"다음 단어 '{target.word_display}'의 뜻으로 가장 알맞은 것을 고르세요.",
                 "correct_answer": target.meaning_ko,
                 "distractors": distractors,
                 "word": target.word_display,
                 "question_type": 1,
             }
+            return self._add_shuffled_options(result) if shuffle_options else result
 
         elif question_type == 2:
             # English definition matching
             distractors = self.generate_meaning_distractors(target, n=3, field="definition_en")
             if len(distractors) < 3:
                 return None
-            return {
+            result = {
                 "stem": f"Choose the correct English definition of '{target.word_display}'.",
                 "correct_answer": target.definition_en,
                 "distractors": distractors,
                 "word": target.word_display,
                 "question_type": 2,
             }
+            return self._add_shuffled_options(result) if shuffle_options else result
 
         elif question_type == 3:
             # Synonym selection
@@ -337,13 +345,14 @@ class DistractorEngine:
             distractors = self.generate_synonym_distractors(target, n=3)
             if len(distractors) < 3:
                 return None
-            return {
+            result = {
                 "stem": f"다음 단어 '{target.word_display}'와 의미가 가장 비슷한 유의어를 고르세요.",
                 "correct_answer": correct,
                 "distractors": distractors,
                 "word": target.word_display,
                 "question_type": 3,
             }
+            return self._add_shuffled_options(result) if shuffle_options else result
 
         elif question_type == 4:
             # Antonym selection
@@ -353,13 +362,14 @@ class DistractorEngine:
             distractors = self.generate_antonym_distractors(target, n=3)
             if len(distractors) < 3:
                 return None
-            return {
+            result = {
                 "stem": f"다음 단어 '{target.word_display}'와 의미가 반대인 반의어를 고르세요.",
                 "correct_answer": correct,
                 "distractors": distractors,
                 "word": target.word_display,
                 "question_type": 4,
             }
+            return self._add_shuffled_options(result) if shuffle_options else result
 
         elif question_type == 5:
             # Sentence completion
@@ -379,25 +389,41 @@ class DistractorEngine:
             distractors = self.generate_sentence_distractors(target, n=3)
             if len(distractors) < 3:
                 return None
-            return {
+            result = {
                 "stem": f"문맥상 빈칸에 들어갈 가장 적절한 단어를 고르세요.\n\n{blanked}",
                 "correct_answer": target.word_display,
                 "distractors": distractors,
                 "word": target.word_display,
                 "question_type": 5,
             }
+            return self._add_shuffled_options(result) if shuffle_options else result
 
         elif question_type == 6:
             # Collocation judgment
             if not target.collocation:
                 return None
             correct_coll = random.choice(target.collocation)
-            return {
+            result = {
                 "stem": f"다음 연어 표현이 올바른지 판단하세요: '{correct_coll}'",
                 "correct_answer": "올바름",
                 "distractors": ["올바르지 않음"],
                 "word": target.word_display,
                 "question_type": 6,
             }
+            # Add shuffled options for type 6
+            if shuffle_options and result.get("distractors"):
+                result["options"] = [result["correct_answer"]] + result["distractors"]
+                random.shuffle(result["options"])
+            return result
 
         return None
+
+    def _add_shuffled_options(self, item: dict) -> dict:
+        """Add shuffled options array to an item dict.
+
+        This is called automatically by generate_item when shuffle_options=True.
+        """
+        if item and item.get("distractors"):
+            item["options"] = [item["correct_answer"]] + item["distractors"]
+            random.shuffle(item["options"])
+        return item
