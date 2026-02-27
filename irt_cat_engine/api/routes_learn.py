@@ -1,5 +1,5 @@
 """API routes for learning recommendations and goal-based learning."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..data.database import get_db
