@@ -203,6 +203,7 @@ function AppInner() {
 
       {screen === "survey" && (
         <SurveyScreen
+          lang={lang}
           onStart={handleStart}
           onStartGoalLearning={handleStartGoalLearning}
           loading={loading}
