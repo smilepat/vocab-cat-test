@@ -1,5 +1,5 @@
 """API routes for learning recommendations and goal-based learning."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ..data.database import get_db
@@ -19,6 +19,13 @@ from .schemas import (
     GoalLearningSubmitResponse,
     LearningCardResponse,
     GoalSessionProgress,
+)
+from .error_handlers import (
+    AppError,
+    NotFoundError,
+    ServerError,
+    ServiceUnavailableError,
+    handle_unexpected_error,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["learn"])
@@ -87,7 +94,11 @@ def get_vocab_matrix(session_id: str, db: Session = Depends(get_db)):
 def start_goal_learning(request: GoalLearningStartRequest, db: Session = Depends(get_db)):
     """Start a new goal-based learning session."""
     if not session_manager.is_loaded:
-        raise HTTPException(status_code=503, detail="Server is still loading data")
+        raise ServiceUnavailableError(
+            service="Vocabulary database",
+            user_message_ko="어휘 데이터를 로딩 중입니다. 잠시 후 다시 시도해주세요.",
+            user_message_en="Vocabulary data is still loading. Please try again in a moment.",
+        )
 
     try:
         session, user = start_goal_learning_session(
@@ -137,8 +148,12 @@ def start_goal_learning(request: GoalLearningStartRequest, db: Session = Depends
             first_card=first_card,
         )
 
+    except AppError:
+        # Re-raise our custom errors
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Handle unexpected errors with structured response
+        raise handle_unexpected_error(e, "start_goal_learning")
 
 
 @router.get("/learn/goal/{session_id}/next", response_model=LearningCardResponse)
