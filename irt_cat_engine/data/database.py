@@ -7,7 +7,7 @@ import os
 import logging
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 logger = logging.getLogger("irt_cat_engine.database")
@@ -48,8 +48,37 @@ if DATABASE_URL.startswith("postgresql"):
         "pool_size": 10,
         "max_overflow": 20,
     })
+# SQLite-specific optimizations
+elif DATABASE_URL.startswith("sqlite"):
+    engine_kwargs.update({
+        "connect_args": {
+            "check_same_thread": False,  # Allow multi-threading
+            "timeout": 30,  # 30 seconds timeout for locks
+        },
+        "pool_pre_ping": True,  # Check connection health
+    })
 
 engine = create_engine(DATABASE_URL, **engine_kwargs)
+
+
+# Enable WAL mode for SQLite to improve concurrent access
+@event.listens_for(engine, "connect")
+def set_sqlite_pragma(dbapi_conn, connection_record):
+    """Configure SQLite for better performance and concurrency."""
+    if DATABASE_URL.startswith("sqlite"):
+        cursor = dbapi_conn.cursor()
+        # WAL mode allows concurrent reads and writes
+        cursor.execute("PRAGMA journal_mode=WAL")
+        # NORMAL synchronous mode is faster and still safe with WAL
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        # Increase cache size for better performance (10MB)
+        cursor.execute("PRAGMA cache_size=-10000")
+        # Enable foreign keys
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+        logger.debug("SQLite PRAGMA settings applied: WAL mode, NORMAL sync, 10MB cache")
+
+
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
