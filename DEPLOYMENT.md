@@ -185,6 +185,7 @@ docker compose up -d backend prometheus alertmanager grafana
 
 - `monitoring/prometheus/prometheus.yml`
 - `monitoring/prometheus/alerts.yml`
+- `monitoring/prometheus/quick-queries.md`
 - `monitoring/alertmanager/alertmanager.yml`
 - `monitoring/grafana/provisioning/datasources/prometheus.yml`
 - `monitoring/grafana/provisioning/dashboards/dashboards.yml`

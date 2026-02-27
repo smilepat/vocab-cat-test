@@ -152,12 +152,15 @@ def start_test(req: TestStartRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Failed to generate item content")
 
     try:
-        generation_score = float(item_content.get("generation_score", 100.0))
+        raw_generation_score = item_content.get("generation_score")
+        generation_score = float(raw_generation_score) if raw_generation_score is not None else 100.0
+        raw_generation_model = item_content.get("generation_model")
+        generation_model = str(raw_generation_model) if raw_generation_model not in (None, "") else "rule-based"
         record_item_generation(
             score=generation_score,
             accepted=True,
             stage="final",
-            model=str(item_content.get("generation_model", "rule-based")),
+            model=generation_model,
             exam_type="csat",
             target_difficulty=float(active.cat_session.current_theta),
             actual_difficulty=float(first_item_params.difficulty_b),
@@ -293,12 +296,15 @@ def respond_to_item(session_id: str, req: TestRespondRequest, db: Session = Depe
         raise HTTPException(status_code=500, detail="Failed to generate item content")
 
     try:
-        generation_score = float(item_content.get("generation_score", 100.0))
+        raw_generation_score = item_content.get("generation_score")
+        generation_score = float(raw_generation_score) if raw_generation_score is not None else 100.0
+        raw_generation_model = item_content.get("generation_model")
+        generation_model = str(raw_generation_model) if raw_generation_model not in (None, "") else "rule-based"
         record_item_generation(
             score=generation_score,
             accepted=True,
             stage="final",
-            model=str(item_content.get("generation_model", "rule-based")),
+            model=generation_model,
             exam_type="csat",
             target_difficulty=float(cat.current_theta),
             actual_difficulty=float(next_item_params.difficulty_b),
