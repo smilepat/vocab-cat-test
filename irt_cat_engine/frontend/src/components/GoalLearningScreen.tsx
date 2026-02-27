@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { t } from "../i18n/translations";
 import type { LearningCard, GoalSessionProgress } from "../types/api";
 
 interface Props {
@@ -15,7 +14,6 @@ interface Props {
 
 export default function GoalLearningScreen({
   lang,
-  sessionId,
   goalName,
   targetWordCount,
   currentCard,
@@ -145,7 +143,6 @@ export default function GoalLearningScreen({
               {currentCard.options.map((opt, idx) => {
                 const isSelected = selectedOption === opt;
                 const isCorrect = opt === currentCard.correct_answer;
-                const showCorrectness = showAnswer && isSelected;
 
                 return (
                   <button
