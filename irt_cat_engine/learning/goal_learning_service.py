@@ -286,9 +286,12 @@ def submit_learning_card(
             word=word,
             first_question_type=question_type,
             dvk_level=1,
+            review_count=0,
+            correct_count=0,
             assessment_history=[],
         )
         db.add(learned_word)
+        db.flush()  # Flush to get default values from database
         session.words_studied += 1
 
     # Update review statistics

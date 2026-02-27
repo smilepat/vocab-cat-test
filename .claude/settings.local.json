@@ -4,7 +4,11 @@
       "Bash(python -m uvicorn:*)",
       "Bash(find:*)",
       "Bash(curl:*)",
-      "Bash(python -c:*)"
+      "Bash(python -c:*)",
+      "Bash(git push:*)",
+      "Bash(tasklist:*)",
+      "Bash(awk:*)",
+      "Bash(xargs -I {} taskkill //PID {} //F)"
     ],
     "deny": [],
     "ask": []

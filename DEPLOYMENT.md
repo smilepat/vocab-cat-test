@@ -175,6 +175,12 @@ docker compose up -d backend prometheus alertmanager grafana
 
 초기 기동 후 Grafana에 `Item Generation Overview` 대시보드가 자동 로드됩니다.
 
+대시보드 상단 필터:
+
+- `stage`: draft/review/final 단계별 지표 확인
+- `model`: 생성 모델별 성능 비교
+- `exam_type`: 시험 타입별 분리 관측
+
 관련 설정 파일:
 
 - `monitoring/prometheus/prometheus.yml`
