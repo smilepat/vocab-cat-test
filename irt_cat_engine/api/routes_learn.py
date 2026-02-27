@@ -1,4 +1,6 @@
 """API routes for learning recommendations and goal-based learning."""
+import random
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -114,12 +116,19 @@ def start_goal_learning(request: GoalLearningStartRequest, db: Session = Depends
             # Fallback to type 1 if the requested type fails
             item = session_manager._distractor_engine.generate_item(word_data, question_type=1)
 
+        # Create shuffled options from correct answer and distractors
+        if item and item.get("distractors"):
+            options = [item["correct_answer"]] + item["distractors"]
+            random.shuffle(options)
+        else:
+            options = None
+
         first_card = LearningCardResponse(
             word=word_data.word_display,
             question_type=question_type,
             stem=item.get("stem"),
             correct_answer=item.get("correct_answer"),
-            options=item.get("options"),
+            options=options,
             pos=word_data.pos or "",
             cefr=word_data.cefr or "",
             meaning_ko=word_data.meaning_ko or "",
@@ -165,6 +174,13 @@ def get_next_learning_card(session_id: str, db: Session = Depends(get_db)):
         if not item:
             item = session_manager._distractor_engine.generate_item(word_data, question_type=1)
 
+        # Create shuffled options from correct answer and distractors
+        if item and item.get("distractors"):
+            options = [item["correct_answer"]] + item["distractors"]
+            random.shuffle(options)
+        else:
+            options = None
+
         # Get existing learned word data if available
         from ..data.db_models import LearnedWord
         learned_word = db.query(LearnedWord).filter(
@@ -180,7 +196,7 @@ def get_next_learning_card(session_id: str, db: Session = Depends(get_db)):
             question_type=question_type,
             stem=item.get("stem"),
             correct_answer=item.get("correct_answer"),
-            options=item.get("options"),
+            options=options,
             pos=word_data.pos or "",
             cefr=word_data.cefr or "",
             meaning_ko=word_data.meaning_ko or "",
@@ -239,6 +255,13 @@ def submit_goal_learning_card(
             if not item:
                 item = session_manager._distractor_engine.generate_item(word_data, question_type=1)
 
+            # Create shuffled options from correct answer and distractors
+            if item and item.get("distractors"):
+                options = [item["correct_answer"]] + item["distractors"]
+                random.shuffle(options)
+            else:
+                options = None
+
             # Get learned word data
             from ..data.db_models import LearnedWord
             learned_word = db.query(LearnedWord).filter(
@@ -254,7 +277,7 @@ def submit_goal_learning_card(
                 question_type=question_type,
                 stem=item.get("stem"),
                 correct_answer=item.get("correct_answer"),
-                options=item.get("options"),
+                options=options,
                 pos=word_data.pos or "",
                 cefr=word_data.cefr or "",
                 meaning_ko=word_data.meaning_ko or "",
