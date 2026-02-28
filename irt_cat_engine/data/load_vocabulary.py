@@ -153,8 +153,8 @@ def load_vocabulary(path: Path | None = None) -> list[VocabWord]:
         path = VOCAB_DB_PATH
 
     words = []
-    with open(path, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f, delimiter="\t")
+    with open(path, "r", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f, delimiter=",")
         for i, row in enumerate(reader):
             try:
                 freq_rank = int(row.get("freq_rank", 0) or 0) or (i + 1)

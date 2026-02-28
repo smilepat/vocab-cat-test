@@ -149,7 +149,7 @@ def calculate_next_review(
             new_interval = interval_days * ease_factor * 1.3
         new_ease = ease_factor + 0.15
 
-    next_review = datetime.now(timezone.utc) + timedelta(days=new_interval)
+    next_review = datetime.utcnow() + timedelta(days=new_interval)
 
     return next_review, new_ease, new_interval
 
@@ -213,7 +213,7 @@ def get_next_word_to_learn(
     studied_word_set = set(studied_word_dict.keys())
 
     # Priority 1: Words due for review (spaced repetition)
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     due_words = [
         lw for lw in studied_words
         if lw.next_review_at and lw.next_review_at <= now and not lw.is_mastered
@@ -277,7 +277,7 @@ def submit_learning_card(
         LearnedWord.word == word,
     ).first()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
 
     if not learned_word:
         # First exposure
